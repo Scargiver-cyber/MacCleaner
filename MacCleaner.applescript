@@ -6,7 +6,7 @@ use AppleScript version "2.4"
 use scripting additions
 
 -- Configuration
-property scriptPath : "/Users/jasontilson/ai-terminal/scripts/mac_cleaner.sh"
+property scriptPath : "/Users/jasontilson/ai-terminal/projects/MacCleaner/mac_cleaner.sh"
 property terminalApp : "Terminal"
 
 -- Main menu

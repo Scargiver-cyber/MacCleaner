@@ -1,15 +1,12 @@
 #!/bin/bash
 #
 # mac_cleaner.sh - CleanMyMac replacement using native macOS tools
-# Part of the ai-terminal hybrid maintenance system
 #
 # Usage:
 #   ./mac_cleaner.sh              # Interactive menu
 #   ./mac_cleaner.sh --analyze    # Run analysis for AI agent
 #   ./mac_cleaner.sh --quick      # Safe quick cleanup (no prompts)
 #   ./mac_cleaner.sh --help       # Show help
-#
-# Integrates with: python scripts/agent_prompt.py mac_maintainer
 #
 
 set -euo pipefail
@@ -25,12 +22,12 @@ BOLD='\033[1m'
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AI_TERMINAL_DIR="$(dirname "$SCRIPT_DIR")"
-LOG_FILE="$AI_TERMINAL_DIR/logs/mac_cleaner_$(date +%Y%m%d).log"
+LOG_DIR="${MACCLEANER_LOG_DIR:-$SCRIPT_DIR/logs}"
+LOG_FILE="$LOG_DIR/mac_cleaner_$(date +%Y%m%d).log"
 DRY_RUN=false
 
 # Ensure logs directory exists
-mkdir -p "$AI_TERMINAL_DIR/logs"
+mkdir -p "$LOG_DIR"
 
 # Logging function
 log() {
@@ -1011,9 +1008,28 @@ scan_large_files() {
     print_color "$YELLOW" "Tip: Review and delete files you no longer need"
 }
 
-# Run with AI agent
+# Run with AI agent (optional — requires Ollama + mac_maintainer agent)
 run_with_ai() {
     print_header "AI-POWERED ANALYSIS"
+
+    # Resolve agent_prompt.py — honour MACCLEANER_AGENT_SCRIPT env var, then look
+    # in the same directory as this script, then fall back to graceful skip.
+    local agent_script="${MACCLEANER_AGENT_SCRIPT:-}"
+    if [[ -z "$agent_script" ]]; then
+        local candidate="$SCRIPT_DIR/scripts/agent_prompt.py"
+        [[ -f "$candidate" ]] && agent_script="$candidate"
+    fi
+
+    if [[ -z "$agent_script" || ! -f "$agent_script" ]]; then
+        print_color "$YELLOW" "AI analysis is optional and needs a separate tool."
+        print_color "$YELLOW" "If you have Ollama + the mac_maintainer agent set up, point"
+        print_color "$YELLOW" "MACCLEANER_AGENT_SCRIPT to your agent_prompt.py and re-run."
+        echo ""
+        print_color "$CYAN" "Falling back to plain analysis output:"
+        echo ""
+        analyze_system
+        return
+    fi
 
     echo "Collecting system information..."
     local analysis_file="/tmp/mac_analysis_$(date +%Y%m%d_%H%M%S).txt"
@@ -1022,18 +1038,9 @@ run_with_ai() {
     echo ""
     print_color "$CYAN" "Analysis saved to: $analysis_file"
     echo ""
-    print_color "$YELLOW" "Run the AI agent with:"
-    echo ""
-    echo "python $AI_TERMINAL_DIR/scripts/agent_prompt.py mac_maintainer \\"
-    echo "  --objective \"Analyze my Mac and recommend cleanup actions\" \\"
-    echo "  --var-file disk_report \"$analysis_file\" \\"
-    echo "  --var system_info \"macOS $(sw_vers -productVersion)\" \\"
-    echo "  --var concerns \"General cleanup and optimization\" \\"
-    echo "  --execute"
-    echo ""
 
     if confirm "Run AI analysis now?"; then
-        python "$AI_TERMINAL_DIR/scripts/agent_prompt.py" mac_maintainer \
+        python3 "$agent_script" mac_maintainer \
             --objective "Analyze my Mac and recommend safe cleanup actions with specific commands" \
             --var-file disk_report "$analysis_file" \
             --var system_info "macOS $(sw_vers -productVersion), $(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo 'Mac')" \
@@ -1160,10 +1167,10 @@ show_help() {
     echo "Interactive mode (default):"
     echo "  Run without options to enter the interactive menu"
     echo ""
-    echo "Integration with AI agent:"
+    echo "Optional AI analysis (requires Ollama + mac_maintainer agent):"
     echo "  $0 --analyze > /tmp/analysis.txt"
-    echo "  python scripts/agent_prompt.py mac_maintainer \\"
-    echo "    --var-file disk_report /tmp/analysis.txt --execute"
+    echo "  MACCLEANER_AGENT_SCRIPT=/path/to/agent_prompt.py $0"
+    echo "  Then choose option 3 (AI-powered analysis) from the menu."
 }
 
 # Main

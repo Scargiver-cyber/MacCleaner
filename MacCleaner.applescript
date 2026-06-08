@@ -1,12 +1,29 @@
--- MacCleaner GUI - Full CleanMyMac Replacement
+-- MacCleaner GUI - CleanMyMac Replacement
 -- A native macOS interface for the mac_cleaner.sh script
--- Part of ai-terminal system
 
 use AppleScript version "2.4"
 use scripting additions
 
+-- Self-locate mac_cleaner.sh relative to this script's bundle.
+-- If MACCLEANER_SCRIPT env var is set, that path is used instead.
+on getScriptPath()
+	-- Check env var override first
+	try
+		set envPath to do shell script "echo \"$MACCLEANER_SCRIPT\""
+		if envPath is not "" then return envPath
+	end try
+	-- Resolve relative to the .app bundle (Resources folder)
+	try
+		set bundlePath to do shell script "osascript -e 'path to me' 2>/dev/null | xargs dirname"
+		set candidate to bundlePath & "/mac_cleaner.sh"
+		do shell script "test -x " & quoted form of candidate
+		return candidate
+	end try
+	-- Last resort: same directory as the script itself
+	return (POSIX path of (path to me)) & "/../../../mac_cleaner.sh"
+end getScriptPath
+
 -- Configuration
-property scriptPath : "/Users/jasontilson/ai-terminal/projects/MacCleaner/mac_cleaner.sh"
 property terminalApp : "Terminal"
 
 -- Main menu
@@ -44,7 +61,7 @@ on doQuickClean()
 		display notification "Running safe cleanup..." with title "Mac Cleaner"
 
 		try
-			set cleanupResult to do shell script scriptPath & " --quick 2>&1"
+			set cleanupResult to do shell script (my getScriptPath()) & " --quick 2>&1"
 			display dialog "✅ Cleanup Complete!" & return & return & ¬
 				"Your Mac has been cleaned." & return & return & ¬
 				"Run 'Full Menu' for more options." ¬
@@ -334,12 +351,13 @@ end purgeMemory
 
 -- Open script in Terminal with optional arguments
 on openInTerminal(args)
+	set thePath to my getScriptPath()
 	tell application "Terminal"
 		activate
 		if args is "" then
-			do script scriptPath
+			do script thePath
 		else
-			do script scriptPath & " " & args
+			do script thePath & " " & args
 		end if
 	end tell
 end openInTerminal
